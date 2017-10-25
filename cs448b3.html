@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+
+<head>
+	<script src="https://d3js.org/d3.v4.min.js"></script>
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/css/bootstrap.min.css" integrity="sha384-rwoIResjU2yc3z8GV/NPeZWAv56rSmLldC3R/AZzGRnGxQQKnKkoFVhFQhNUwEyJ" crossorigin="anonymous">
+	<script src="https://code.jquery.com/jquery-3.1.1.slim.min.js" integrity="sha384-A7FZj7v+d/sdmMqp/nOQwliLvUsJfDHW+k9Omg/a/EheAdgtzNs3hpfag6Ed950n" crossorigin="anonymous"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/js/bootstrap.min.js" integrity="sha384-vBWWzlZJ8ea9aCX4pEW3rVHjgjt7zpkNpZk+02D9phzyeVkE+jo0ieGizqPLForn" crossorigin="anonymous"></script>
+	<link href="https://fonts.googleapis.com/css?family=Bree+Serif" rel="stylesheet">
+</head>
+
+<style>
+	label{
+		font-family: Bree Serif, serif;
+	}
+	
+	.form-group{
+		margin-top: 10px;
+		margin-right: 15px;
+	}
+	
+</style>
+
+<body>
+	<div class='row'>
+		<div id="map" class="col-md-6 col-sm-12"></div>
+		<div class="col-md-6 col-sm-12" style="padding: 15px;">
+			<center>
+				<!-- Filter by DBH -->
+				<div class="form-group">
+					<label for="dbhInput">Filter by Tree Diameter at Breast Height</label>
+					<div class="row" style="margin: 0px;">
+						<div class="col-md-9" style="padding-right: 0px;"><input type="text" class="form-control" id="dbhInput" placeholder="Please type an integer between 0 to 140"></div>
+						<div class="col-md-3" style="padding-left: 0px;"><button type="submit" class="btn btn-secondary" id="dbhBtn" style="width: 100%; margin: 0px 20px;">Go</button></div> 
+					</div>	
+					<div class="alert alert-danger" style="display: none;" id="dbhError"></div>
+				</div>
+				<hr>
+				<!-- Filter by PlotSize -->
+				
+				<hr>
+				<!-- Clear Filter Criteria -->
+				<button type="submit" id="clearBtn" class="btn btn-info" style="width: 100%; margin-right: 15px;">Clear Filter Criteria</button>
+			</center>
+			
+			
+		</div>
+	</div>
+	
+	
+	<script type="text/javascript">
+		// Set up size
+		var mapWidth = 750;
+		var mapHeight = 750;
+		
+		var treeData = [];
+		// This is the mapping between <longitude, latitude> position to <x, y> pixel position on the map
+		// projection is a function and it has an inverse:
+		// projection([lon, lat]) returns [x, y]
+		// projection.invert([x, y]) returns [lon, lat]
+		
+		var projection = d3.geoMercator()
+		  .center([-122.433701, 37.767683]) // San Francisco, roughly
+		  .scale(225000)
+		  .translate([mapWidth / 2, mapHeight / 2]);
+
+		// Add an SVG element to the DOM
+		var svg = d3.select('#map').append('svg')
+		  .attr('width', mapWidth)
+		  .attr('height', mapHeight);
+
+		// Add SVG map at correct size, assuming map is saved in a subdirectory called `data`
+		svg.append('image')
+		  .attr('width', mapWidth)
+		  .attr('height', mapHeight)
+		  .attr('xlink:href', 'data/sf-map.svg');
+		
+		// Add a rect as detail box
+		svg.append('rect')
+			.attr('x', 10)
+			.attr('y', 10)
+			.attr('width', mapWidth)
+			.attr('height', 160)
+			.attr('fill', "rgba(255,255,255,0.5)")
+			
+		// Add information box
+		svg.append('text')
+			.text('Tree Information')
+			.attr('x', 20)
+			.attr('y', 30)
+			.attr('font-family', 'Bree Serif, serif')
+			.attr('font-size', 20)
+			.attr('fill', "#373737");
+		
+		const labels = [['Tree ID', 'No Selected Tree'], 
+							['Species', 'No Selected Tree'], 
+							['Address', 'No Selected Tree'],
+							['Site Location', 'No Selected Tree'],
+							['Plot Size', 'No Selected Tree'],
+							['DBH', 'No Selected Tree'],
+							['Coordination', 'No Selected Tree']];
+	
+		var infoTexts = svg.selectAll ('text')
+							.data(labels)
+							.enter();
+							
+		
+		infoTexts.append('text')
+					.text(function(d){return d[0];})
+					.attr('y', function(d,i){
+						return 10+22 * (i+1);
+					})
+					.attr('x', 20)
+					.attr('font-family', 'Bree Serif, serif')
+					.attr('fill', "#373737");
+		
+		infoTexts.append('text')
+					.text(function(d){return d[1];})
+					.attr('y', function(d,i){
+						return 10+22 * (i+1);
+					})
+					.attr('x', 120)
+					.attr('font-family', 'Bree Serif, serif')
+					.attr('fill', "#999")
+					.attr('id', function(d){
+						return d[0].split(' ')[0];
+					});
+		
+		d3.csv("data/trees.csv").get(function(data){
+		
+			data.forEach(function(entry){
+				// Format data
+				
+				// For all fields, if it is empty, then fill it with "Unknown"
+				if (entry.qSpecies === "Tree(s) ::" ||  entry.qSpecies === "::"){
+					entry.qSpecies = "Unknown";
+				}
+				
+				if (entry.qAddress.length < 1){
+					entry.qAddress = "Unknown";
+				}
+				
+				if (entry.DBH.length < 1){
+					entry.DBH = "Unknown";
+				}
+				
+				treeData.push(entry);
+			});
+			
+			
+			// Add points on the map
+			var colorBeforeMouseOver; // For filter
+			var sizeBeforeMouseOver;
+			var selectedA = null; // For Requirement 1. SelectedA and B are circle elements
+			var selectedB = null;
+			
+			svg.selectAll('circle')
+			.data(data)
+			.enter()
+			.append('circle')
+			.attr("cx", function(d){
+				return projection([d.Longitude, d.Latitude])[0];
+			})
+			.attr("cy", function(d){
+				return projection([d.Longitude, d.Latitude])[1];
+			})
+			.attr('r', 1)
+			.attr('fill', '#777')
+			.on('mouseover', function(d){    // when points are hovered
+				colorBeforeMouseOver = d3.select(this).style('fill');
+				sizeBeforeMouseOver = d3.select(this).attr('r');
+				d3.select(this)
+					.attr('fill', '#FD6E8A')
+					.attr('r', 5);
+					
+					// Fill detail box
+					d3.select('#Tree').text(d['TreeID']);
+					d3.select('#Species').text(d['qSpecies']);
+					d3.select('#Address').text(d['qAddress']);
+					d3.select('#Site').text(d['qSiteInfo']);
+					d3.select('#DBH').text(d['DBH']);
+					d3.select('#Plot').text(d['PlotSize']);
+					if (d['Longitude'].length < 1 && d['Latitude'].length < 1){
+						d3.select('#Coordination').text('Unknown');
+					} else {
+						d3.select('#Coordination').text('(' + d['Longitude'] + ','+ d['Latitude'] + ')');
+					}
+					
+			})
+			.on('mouseout', function (){
+				d3.select(this)
+					.transition()
+					.attr('fill', colorBeforeMouseOver)
+					.attr('r', sizeBeforeMouseOver);
+					
+					// Recover detail box
+					d3.select('#Tree').text('No Selected Tree');
+					d3.select('#Species').text('No Selected Tree');
+					d3.select('#Address').text('No Selected Tree');
+					d3.select('#Site').text('No Selected Tree');
+					d3.select('#DBH').text('No Selected Tree');
+					d3.select('#Plot').text('No Selected Tree');
+					d3.select('#Coordination').text('No Selected Tree');
+			})
+			.on('click', function(){ // Click two dots
+				if (selectedA === null) {
+					selectedA = this;
+					d3.select(this)
+						.attr('fill', '#C08283') // Does not work
+						.attr('r', 3);
+				} else if (selectedB === null){
+					selectedB = this;
+					d3.select(this)
+						.attr('fill', '#C08283')
+						.attr('r', 3);
+						
+					// TODO: Do calculation
+					var ACoordinate;
+					var BCoordinate;
+				} else {
+					selectedA.attr('fill', '#777')
+						.attr('r', 1);
+					selectedB.attr('fill', '#777')
+						.attr('r', 1);
+						
+					selectedA = this;
+					selectedB = null;
+				}
+			});
+		});
+		
+		
+		// Code for filter by DBH
+		$('#dbhBtn').on('click', function (){
+			var dbhInput = document.getElementById("dbhInput").value;
+			var dbhError = document.getElementById('dbhError');
+			// A prefilter based on our understanding of the possible values of a field
+			const nonExistDiameter = [41, 47, 49, 52, 53, 54, 56, 57, 58, 59, 61, 62, 63, 64,
+												66, 67, 69, 71, 72, 73, 74, 76, 77, 78, 79, 81, 83, 84, 
+												86, 87, 88, 89, 91, 92, 93, 94, 96, 97, 98, 99, 101, 102,
+												103, 104, 105, 107, 108, 109, 110, 111, 112, 113, 114,
+												115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 127,
+												128, 129, 131, 132, 133, 134, 136, 137, 138, 139];
+		
+			
+			if ($.isNumeric(dbhInput) && (dbhInput <= 140) && (dbhInput >= 0)){
+				console.log(nonExistDiameter.indexOf(parseInt(dbhInput)));
+				if (nonExistDiameter.indexOf(parseInt(dbhInput)) > -1){
+					dbhError.style.display = "block";
+					console.log("didn'tfind");
+					dbhError.innerText = 'Sorry we didn\'t find any tree whose diameter at breast height is ' + dbhInput;
+				} else {
+					dbhError.style.display = "none";
+					svg.selectAll('circle')
+						.data(treeData.filter(function (tree){
+							return (tree.DBH === dbhInput);
+						}))
+						.attr('fill', 'red')
+						.attr('r', 5);
+				}
+			} else {
+				dbhError.style.display = "block";
+				dbhError.innerText = 'Invalid input. ';
+			}
+		
+		});
+		
+		// Code for clear filter result on map
+		$('#clearBtn').on('click', function (){
+			svg.selectAll('circle')
+				.attr('r', 1)
+				.attr('fill', '#777');
+		
+		});
+		
+		  
+		 
+	</script>
+</body>
