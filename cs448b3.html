@@ -7,6 +7,8 @@
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
 	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/js/bootstrap.min.js" integrity="sha384-vBWWzlZJ8ea9aCX4pEW3rVHjgjt7zpkNpZk+02D9phzyeVkE+jo0ieGizqPLForn" crossorigin="anonymous"></script>
 	<link href="https://fonts.googleapis.com/css?family=Bree+Serif" rel="stylesheet">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-slider/9.9.0/bootstrap-slider.js"></script>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-slider/9.9.0/css/bootstrap-slider.css">
 </head>
 
 <style>
@@ -19,6 +21,7 @@
 		margin-right: 15px;
 	}
 	
+	
 </style>
 
 <body>
@@ -26,21 +29,45 @@
 		<div id="map" class="col-md-6 col-sm-12"></div>
 		<div class="col-md-6 col-sm-12" style="padding: 15px;">
 			<center>
+				<div class="form-group">
+					<label>Filter by Intersection of Two Area</label>
+					<br>
+					<label>Radius For A (0~3.5 miles): </label><br><input style="margin: 0px 10px;" id="radiusA" type="text" data-slider-min="0" data-slider-max="3.5" data-slider-step="0.1" data-slider-value="1.7"/>
+					<label id="radiusAVal">1.7 miles</label>
+					<br>
+					<label>Radius For B (0~3.5 miles): </label><br><input style="margin: 0px 10px;" id="radiusB" type="text" data-slider-min="0" data-slider-max="3.5" data-slider-step="0.1" data-slider-value="1.7"/>
+					<label id="radiusBVal">1.7 miles</label>
+				</div>
+				<hr>
 				<!-- Filter by DBH -->
 				<div class="form-group">
 					<label for="dbhInput">Filter by Tree Diameter at Breast Height</label>
 					<div class="row" style="margin: 0px;">
-						<div class="col-md-9" style="padding-right: 0px;"><input type="text" class="form-control" id="dbhInput" placeholder="Please type an integer between 0 to 140"></div>
+						<div class="col-md-9" style="padding: 0px;"><input type="text" class="form-control" id="dbhInput" placeholder="Please type an integer between 0 to 140"></div>
 						<div class="col-md-3" style="padding-left: 0px;"><button type="submit" class="btn btn-secondary" id="dbhBtn" style="width: 100%; margin: 0px 20px;">Go</button></div> 
 					</div>	
 					<div class="alert alert-danger" style="display: none;" id="dbhError"></div>
 				</div>
 				<hr>
-				<!-- Filter by PlotSize -->
-				
+				<!-- Filter by qSiteInfo -->
+				<div class="form-group">
+					<label for="dbhInput">Filter by Site Location</label>
+					<div class="row" style="margin: 0px;">
+						<select class="custom-select col-md-9" id="qSiteSelect"  style="padding-right: 0px;">
+							 <option selected value="1">Back Yard</option>
+							 <option value="2">Front Yard</option>
+							 <option value="3">Median</option>
+							 <option value="4">Side Yard</option>
+							 <option value="5">Sidewalk</option>
+							 <option value="6">Unaccepted Street Yard</option>
+							 <option value="7">Unknown</option>
+						</select>
+						<div class="col-md-3" style="padding-left: 0px;"><button type="submit" class="btn btn-secondary" id="siteBtn" style="width: 100%; margin: 0px 20px;">Go</button></div> 
+					</div>	
+				</div>
 				<hr>
 				<!-- Clear Filter Criteria -->
-				<button type="submit" id="clearBtn" class="btn btn-info" style="width: 100%; margin-right: 15px;">Clear Filter Criteria</button>
+				<button type="submit" id="clearBtn" class="btn btn-info" style="margin-right: 15px;">Clear Filter Criteria</button>
 			</center>
 			
 			
@@ -140,6 +167,14 @@
 					entry.qAddress = "Unknown";
 				}
 				
+				if (entry.qSiteInfo === ':'){
+					entry.qSiteInfo = "unknown";
+				}
+				
+				if (entry.PlotSize.length < 1){
+					entry.PlotSize = "Unknown";
+				}
+				
 				if (entry.DBH.length < 1){
 					entry.DBH = "Unknown";
 				}
@@ -147,6 +182,20 @@
 				treeData.push(entry);
 			});
 			
+			// Slider: Radius input of user
+			var radiusA; 
+			var radiusB;
+			$("#radiusA").slider();
+			$("#radiusB").slider();
+			$("#radiusA").on("slide", function(slideEvt) {
+				$("#radiusAVal").text(slideEvt.value + " miles");
+				radiusA = slideEvt;
+			});
+			
+			$("#radiusB").on("slide", function(slideEvt) {
+				$("#radiusBVal").text(slideEvt.value + " miles");
+				radiusB = slideEvt.value;
+			});
 			
 			// Add points on the map
 			var colorBeforeMouseOver; // For filter
@@ -230,6 +279,7 @@
 		});
 		
 		
+		
 		// Code for filter by DBH
 		$('#dbhBtn').on('click', function (){
 			var dbhInput = document.getElementById("dbhInput").value;
@@ -265,12 +315,81 @@
 		
 		});
 		
+		// Code for filter by qSiteInfo
+		$('#siteBtn').on('click', function(){
+			let selectedVal = $("select#qSiteSelect").val();
+			if (selectedVal === "1"){
+				svg.selectAll('circle')
+						.data(treeData.filter(function (tree){
+							var thisSiteInfo = tree.qSiteInfo;
+							var firstSite = thisSiteInfo.split(':');
+							return (firstSite[0].indexOf('Back Yard') > -1);
+						}))
+						.attr('fill', 'red')
+						.attr('r', 5);
+			} else if (selectedVal === "2"){
+				svg.selectAll('circle')
+						.data(treeData.filter(function (tree){
+							var thisSiteInfo = tree.qSiteInfo;
+							var firstSite = thisSiteInfo.split(':');
+							return (firstSite[0].indexOf('Front Yard') > -1);
+						}))
+						.attr('fill', 'red')
+						.attr('r', 5);
+			} else if (selectedVal === "3"){
+				svg.selectAll('circle')
+						.data(treeData.filter(function (tree){
+							var thisSiteInfo = tree.qSiteInfo;
+							var firstSite = thisSiteInfo.split(':');
+							return (firstSite[0].indexOf('Median') > -1);
+						}))
+						.attr('fill', 'red')
+						.attr('r', 3);
+			} else if (selectedVal === "4"){
+				svg.selectAll('circle')
+						.data(treeData.filter(function (tree){
+							var thisSiteInfo = tree.qSiteInfo;
+							var firstSite = thisSiteInfo.split(':');
+							return (firstSite[0].indexOf('Side Yard') > -1);
+						}))
+						.attr('fill', 'red')
+						.attr('r', 5);
+			} else if (selectedVal === "5"){
+				svg.selectAll('circle')
+						.data(treeData.filter(function (tree){
+							var thisSiteInfo = tree.qSiteInfo;
+							var firstSite = thisSiteInfo.split(':');
+							return (firstSite[0].indexOf('Sidewalk') > -1);
+						}))
+						.attr('fill', 'red')
+						.attr('r', 1);
+			}  else if (selectedVal === "6"){
+				svg.selectAll('circle')
+						.data(treeData.filter(function (tree){
+							var thisSiteInfo = tree.qSiteInfo;
+							var firstSite = thisSiteInfo.split(':');
+							return (firstSite[0].indexOf('Unaccepted') > -1);
+						}))
+						.attr('fill', 'red')
+						.attr('r', 5);
+			}  else {
+				svg.selectAll('circle')
+						.data(treeData.filter(function (tree){
+							var thisSiteInfo = tree.qSiteInfo;
+							var firstSite = thisSiteInfo.split(':');
+							return (firstSite[0].indexOf('unknown') > -1);
+						}))
+						.attr('fill', 'red')
+						.attr('r', 5);
+			}
+		});
+		
+		
 		// Code for clear filter result on map
 		$('#clearBtn').on('click', function (){
 			svg.selectAll('circle')
 				.attr('r', 1)
 				.attr('fill', '#777');
-		
 		});
 		
 		  
